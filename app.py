@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 import subprocess
 import logging
+import shlex
 
 app = FastAPI()
 
@@ -17,13 +18,17 @@ def run_inference(prompt: str):
     command = [
         "./build/bin/llama-cli",
         "-m", MODEL_PATH,
-        "-temp", "0",
         "-p", prompt
     ]
     
     try:
-        logger.info(f"Executing command: {' '.join(command)}")
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        # Use shlex.join to properly quote the command arguments
+        quoted_command = shlex.join(command)
+        logger.info(f"Executing command: {quoted_command}")
+        
+        # Use shell=True to ensure the command is interpreted correctly
+        result = subprocess.run(quoted_command, shell=True, capture_output=True, text=True, check=True)
+        
         logger.info("Inference completed successfully")
         return {"result": result.stdout}
     except subprocess.CalledProcessError as e:
