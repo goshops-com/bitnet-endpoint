@@ -1,9 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from flask import Flask, request, jsonify
 import subprocess
 import logging
-import shlex
 
-app = FastAPI()
+app = Flask(__name__)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -11,8 +10,12 @@ logger = logging.getLogger(__name__)
 
 MODEL_PATH = "Llama3-8B-1.58-100B-tokens-TQ2_0.gguf"
 
-@app.post("/inference")
-def run_inference(prompt: str):
+@app.route('/inference', methods=['POST'])
+def run_inference():
+    prompt = request.json.get('prompt')
+    if not prompt:
+        return jsonify({"error": "No prompt provided"}), 400
+
     logger.info(f"Received inference request with prompt: {prompt}")
     
     command = [
@@ -22,27 +25,21 @@ def run_inference(prompt: str):
     ]
     
     try:
-        # Use shlex.join to properly quote the command arguments
-        quoted_command = shlex.join(command)
-        logger.info(f"Executing command: {quoted_command}")
-        
-        # Use shell=True to ensure the command is interpreted correctly
-        result = subprocess.run(quoted_command, shell=True, capture_output=True, text=True, check=True)
-        
+        logger.info(f"Executing command: {' '.join(command)}")
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
         logger.info("Inference completed successfully")
-        return {"result": result.stdout}
+        return jsonify({"result": result.stdout})
     except subprocess.CalledProcessError as e:
         logger.error(f"Error during inference: {e}")
         logger.error(f"Stderr: {e.stderr}")
-        raise HTTPException(status_code=500, detail="Inference failed")
+        return jsonify({"error": "Inference failed", "details": e.stderr}), 500
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail="Unexpected error occurred")
+        return jsonify({"error": "Unexpected error occurred"}), 500
 
-@app.get("/")
+@app.route('/', methods=['GET'])
 def root():
-    return {"message": "Welcome to the BitNet inference API"}
+    return jsonify({"message": "Welcome to the BitNet inference API"})
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8000)

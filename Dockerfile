@@ -1,4 +1,5 @@
 FROM python:3.9-slim
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies
@@ -13,8 +14,8 @@ RUN git clone --recursive --depth 1 https://github.com/microsoft/BitNet.git && \
 WORKDIR /BitNet
 
 # Install Python dependencies
-RUN pip install -r requirements.txt && \
-    pip install fastapi uvicorn && \
+RUN pip install flask gunicorn && \
+    pip install -r requirements.txt && \
     pip cache purge
 
 # Generate code and build
@@ -26,11 +27,11 @@ RUN cmake --build build --target llama-cli --config Release
 ADD https://huggingface.co/brunopio/Llama3-8B-1.58-100B-tokens-GGUF/resolve/main/Llama3-8B-1.58-100B-tokens-TQ2_0.gguf .
 RUN echo "2565559c82a1d03ecd1101f536c5e99418d07e55a88bd5e391ed734f6b3989ac  Llama3-8B-1.58-100B-tokens-TQ2_0.gguf" | shasum -ca 256
 
-# Copy the FastAPI app
+# Copy the Flask app
 COPY app.py .
 
 # Expose the port the app runs on
 EXPOSE 8000
 
-# Run the FastAPI app
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the Flask app with Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:app"]
