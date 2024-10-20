@@ -1,45 +1,36 @@
 from flask import Flask, request, jsonify
 import subprocess
-import logging
 
 app = Flask(__name__)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-MODEL_PATH = "Llama3-8B-1.58-100B-tokens-TQ2_0.gguf"
+def capture_output(command):
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    output = []
+    for stdout_line in iter(process.stdout.readline, ""):
+        output.append(stdout_line.strip())
+    process.stdout.close()
+    return_code = process.wait()
+    if return_code:
+        return f"Error: {process.stderr.read()}"
+    return "\n".join(output)
 
 @app.route('/inference', methods=['POST'])
-def run_inference():
-    prompt = request.json.get('prompt')
-    if not prompt:
-        return jsonify({"error": "No prompt provided"}), 400
+def inference():
+    data = request.json
+    prompt = data.get('prompt', 'The meaning of life is')
+    n = data.get('n', 6)  # Default to 6 if not provided
+    temp = data.get('temp', 0)  # Default to 0 if not provided
 
-    logger.info(f"Received inference request with prompt: {prompt}")
-    
     command = [
-        "./build/bin/llama-cli",
-        "-m", MODEL_PATH,
-        "-p", prompt
+        "python3", "run_inference.py",
+        "-m", "Llama3-8B-1.58-100B-tokens-TQ2_0.gguf",
+        "-p", prompt,
+        "-n", str(n),
+        "-temp", str(temp)
     ]
-    
-    try:
-        logger.info(f"Executing command: {' '.join(command)}")
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-        logger.info("Inference completed successfully")
-        return jsonify({"result": result.stdout})
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error during inference: {e}")
-        logger.error(f"Stderr: {e.stderr}")
-        return jsonify({"error": "Inference failed", "details": e.stderr}), 500
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        return jsonify({"error": "Unexpected error occurred"}), 500
 
-@app.route('/', methods=['GET'])
-def root():
-    return jsonify({"message": "Welcome to the BitNet inference API"})
+    result = capture_output(command)
+    return jsonify({"result": result})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
